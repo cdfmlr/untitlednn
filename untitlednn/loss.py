@@ -11,7 +11,22 @@ class Loss(object):
         raise NotImplementedError
 
 
-class MSELoss(Loss):
+class MAE(Loss):
+    """平均绝对误差
+    """
+    def loss(self, predicted, actual):
+        # m = predicted.shape[0]
+        # return np.sum(np.abs(predicted - actual)) / m
+        return np.mean(np.abs(predicted - actual))
+
+    def grad(self, predicted, actual):
+        m = predicted.shape[0]
+        return np.sign(predicted - actual) / m
+
+
+class MSE(Loss):
+    """均方误差 (Mean squared error)
+    """
     def loss(self, predicted, actual):
         m = predicted.shape[0]
         return np.sum((predicted - actual) ** 2) / (2 * m)
@@ -21,7 +36,7 @@ class MSELoss(Loss):
         return (predicted - actual) / m
 
 
-class SoftmaxCrossEntropyLoss(Loss):
+class SoftmaxCrossEntropy(Loss):
     def loss(self, predicted, actual):
         m = predicted.shape[0]
 

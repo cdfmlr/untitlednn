@@ -8,14 +8,13 @@ from untitlednn.tensor import Tensor
 from untitlednn.nn import NeuralNetwork
 from untitlednn.layer import Dense, ReLU
 from untitlednn.model import Model
-from untitlednn.loss import SoftmaxCrossEntropyLoss
-from untitlednn.optimizer import Adam
-from untitlednn.evaluator import OneHotAccEvaluator, MSEEvaluator
+from untitlednn.loss import SoftmaxCrossEntropy
+from untitlednn.optimizer import Adam, SGD
+from untitlednn.evaluator import OneHotAccEvaluator
 from untitlednn.util.data_iterator import BatchIterator
 
-from untitlednn.initializer import RandomInitializer, ZeroInitializer
-
 MNIST_IMG_LEN = 28 * 28
+MODEL_SAVE_PATH = "/Users/c/Desktop/mnist.pkl"
 
 
 def one_hot(targets, num_classes):
@@ -23,6 +22,10 @@ def one_hot(targets, num_classes):
 
 
 def prepare_mnist():
+    """Load and prepare the MNIST dataset
+
+    :return: (train_x, train_y), (test_x, test_y)
+    """
     print("Loading MNIST...", end="")
     (train_x, train_y), (test_x, test_y) = mnist.load_data()
     print("Done.")
@@ -43,8 +46,10 @@ def prepare_mnist():
 
 
 def main(args):
+    # prepare data
     (train_x, train_y), (test_x, test_y) = prepare_mnist()
 
+    # construct network
     network = NeuralNetwork([
         Dense(MNIST_IMG_LEN, 200),
         ReLU(),
@@ -57,15 +62,30 @@ def main(args):
         Dense(30, 10),
     ])
 
+    # build model
     model = Model(network,
-                  loss=SoftmaxCrossEntropyLoss(),
+                  loss=SoftmaxCrossEntropy(),
                   optimizer=Adam(lr=args.lr),
                   evaluator=OneHotAccEvaluator)
     model.summary()
 
+    # train the model
     print("Start train:")
     model.fit(train_x, train_y, batch_size=args.batch_size, epochs=args.num_epoch, validation_data=(test_x, test_y))
-    model.save("/Users/c/Desktop/mnist.pkl")
+
+    # save and load
+    print(f"Save model to {MODEL_SAVE_PATH}")
+    model.save(MODEL_SAVE_PATH)
+
+    print(f"Load model from {MODEL_SAVE_PATH}.")
+    model: Model = Model.load(MODEL_SAVE_PATH)
+
+    # evaluate the model
+    print("Evaluate on train set:", end='\t')
+    print(model.evaluate(train_x, train_y))
+
+    print("Evaluate on  test set:", end='\t')
+    print(model.evaluate(test_x, test_y))
 
     # iterator = BatchIterator(batch_size=args.batch_size)
     # losses = []
@@ -90,15 +110,9 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # shape = (5, 5)
-    # print(XavierUniformInit()(shape))
-    # print(RandomInitializer()(shape))
-    # print(ZeroInitializer()(shape))
-    # exit()
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_epoch", default=5, type=int)
-    parser.add_argument("--lr", default=1e-3, type=float)
-    parser.add_argument("--batch_size", default=256, type=int)
+    parser.add_argument("--lr", default=1e-3, type=float)  # Adam: 1e-3, SGD: 1e-1
+    parser.add_argument("--batch_size", default=128, type=int)
     args = parser.parse_args()
     main(args)

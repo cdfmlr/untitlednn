@@ -4,6 +4,7 @@ import numpy as np
 class Optimizer(object):
     """Optimizer computes the steps to be added onto params, which optimizes the model
     """
+
     def __init__(self, lr, weight_decay):
         self.lr = lr
         self.weight_decay = weight_decay
@@ -34,6 +35,14 @@ class Optimizer(object):
         """给定一系列梯度，计算返回每个梯度对应的改变大小
         """
         raise NotImplementedError
+
+
+class SGD(Optimizer):
+    def __init__(self, lr, weight_decay=0.0):
+        super().__init__(lr, weight_decay)
+
+    def _compute_steps(self, grads):
+        return -self.lr * grads
 
 
 class Adam(Optimizer):

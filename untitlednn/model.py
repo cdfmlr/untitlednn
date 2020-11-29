@@ -77,8 +77,10 @@ class Model(object):
             te_start = time.time()
             if validation_data:
                 res = self.evaluate(validation_data[0], validation_data[1])
+                if not res.get("loss", None):
+                    res["loss"] = float(losses[-1])
             else:
-                res = {"loss": losses[-1]}
+                res = {"loss": float(losses[-1])}
             te_end = time.time()
 
             if verbose:
@@ -115,11 +117,21 @@ class Model(object):
 
         return s
 
-    def save(self, file_path):
+    def save(self, file_path) -> None:
+        """Save model to file_path
+        """
+        if os.path.exists(file_path):
+            assert os.path.isfile(file_path)
+        if not os.path.exists(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
         with open(file_path, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def load(file_path):
+        """Load saved model (saved by Model.save) from file_path
+
+        :return: Model object
+        """
         with open(file_path, "rb") as f:
             return pickle.load(f)
