@@ -99,3 +99,20 @@ class ReLU(Activation):
 
     def derivative_func(self, x):
         return x > 0
+
+
+class Dropout(Layer):
+    def __init__(self, keep_prob=0.5):
+        super().__init__("Dropout")
+        self._keep_prob = keep_prob
+        self._multiplier = None
+
+    def forward(self, inputs):
+        multiplier = np.random.binomial(
+            1, self._keep_prob, size=inputs.shape)
+        self._multiplier = multiplier / self._keep_prob
+        outputs = inputs * self._multiplier
+        return outputs
+
+    def backward(self, grad):
+        return grad * self._multiplier
