@@ -27,7 +27,7 @@ class Layer(object):
             return 0
         num = 0
         for v in self.params.values():
-            num += len(v)
+            num += v.size
 
         return num
 
