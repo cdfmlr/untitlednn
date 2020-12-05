@@ -1,18 +1,13 @@
 import numpy as np
+from untitlednn.autodiff import *
 
 
-class Tensor(np.ndarray):
-    """Tensor is the np.ndarray
+class Tensor(Node):
+    """Tensor is a autodiff Node
 
     Calling Tensor(array_like) to get a Tensor object.
     """
 
-    def __new__(cls, array_like, *args, **kwargs):
-        """Makes a Tensor object from an array_like.
-
-        Refer:
-        https://stackoverflow.com/questions/27557029/how-should-a-class-that-inherits-from-numpy-ndarray-and-has-a-default-value-be-c
-        https://numpy.org/doc/stable/user/basics.subclassing.html#slightly-more-realistic-example-attribute-added-to-existing-array
-        """
-        obj = np.asarray(array_like).view(cls)
-        return obj
+    def __init__(self, array_like):
+        self.data = np.asarray(array_like)
+        Node.__init__(self, op=identity, inputs=[self.data])
