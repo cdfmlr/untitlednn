@@ -1,4 +1,4 @@
-from untitlednn.tensor import Tensor
+# from untitlednn.tensor import Tensor
 from untitlednn.autodiff import *
 
 
@@ -31,8 +31,8 @@ def test_autodiff():
 def test_tensor():
     set_eager(False)
 
-    a = Tensor([1, 2, 3])
-    b = Tensor([4, 5, 6])
+    a = tensor([1, 2, 3])
+    b = tensor([4, 5, 6])
 
     # c = a + b
     c = sin1(a) * sin1(b)
@@ -50,14 +50,16 @@ def test_tensor():
 def test_tensor_eager():
     set_eager(True)
 
-    a = Tensor([1, 2, 3])
-    b = Tensor([4, 5, 6])
+    a = tensor([0, 2, 3])
+    b = tensor([4, 5, 6])
+
+    a[0] = 1
 
     # c = a + b
     c = sin1(a) * sin1(b)
 
-    print('c:', c)
-    print('c.value:', c.value)
+    print('c:', c, '\nc.shape:', c.shape)
+    print('c.value:', c.value, 'c[0]:', c[0])
 
     # ex = Executor(c)
     # print('ex.run(): ', ex.run())
@@ -68,5 +70,5 @@ def test_tensor_eager():
 
 if __name__ == '__main__':
     # test_autodiff()
-    test_tensor()
+    # test_tensor()
     test_tensor_eager()

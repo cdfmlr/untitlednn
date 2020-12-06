@@ -1,5 +1,5 @@
 import numpy as np
-from untitlednn.tensor import Tensor
+from untitlednn.autodiff import tensor
 
 
 class Initializer(object):
@@ -14,7 +14,7 @@ class Initializer(object):
         raise NotImplementedError
 
     def __call__(self, shape):
-        return Tensor(self.init(shape).astype(np.float32))
+        return tensor(self.init(shape).astype(np.float32))
 
 
 class RandomInitializer(Initializer):

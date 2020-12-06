@@ -2,7 +2,7 @@ import numpy as np
 from functools import wraps
 
 # 调试模式, 打印自动微分执行的信息
-DEBUG = True
+DEBUG = False
 # 及时执行模式, 及时求值
 EAGER = True
 
@@ -14,28 +14,25 @@ def set_eager(eager: bool):
     EAGER = eager
 
 
-class Node(object):
+class Tensor(object):
     """计算图的节点, 表示某个计算的结果
     """
     _global_id = 0  # TODO: Threading safe
 
     def __init__(self, op=None, inputs=None):
+        if inputs is None:
+            inputs = []
         self.inputs = inputs
         self.op = op
 
-        self.id = Node._global_id
-        Node._global_id += 1
+        self.id = Tensor._global_id
+        Tensor._global_id += 1
 
-        self.value = 0.0
+        self.value = np.zeros(0)
         self.grad = 0.0
 
         if EAGER:  # 立即求值
-            self.evaluate()
-            ex = EagerExecutor(self)
-            ex.grad()
-            # self.evaluate()  # 立即求值
-            if DEBUG:
-                print(f"eager exec: {self}")
+            self.eager_exec()
 
     def values_of_inputs(self) -> list:
         """输入的值
@@ -43,7 +40,7 @@ class Node(object):
         """
         values = []
         for i in self.inputs:
-            if isinstance(i, Node):
+            if isinstance(i, Tensor):
                 i = i.value
             values.append(i)
         return values
@@ -52,25 +49,95 @@ class Node(object):
         """计算当前节点的值
         :return: None
         """
-        self.value = self.op.compute(self.values_of_inputs())
+        v = self.op.compute(self.values_of_inputs())
+        self.value = np.asarray(v)
+
+    def eager_exec(self) -> None:
+        """立即求值(value, grad)
+        """
+        self.evaluate()
+        ex = EagerExecutor(self)
+        ex.grad()
+        # self.evaluate()  # 立即求值
+        if DEBUG:
+            print(f"eager exec: {self}")
 
     # def __repr__(self):
     #     return self.__str__
 
     def __str__(self):
-        return f'{self.op} {self.values_of_inputs()} = {self.value}, grad: {self.grad}'
+        return f'Tensor {self.value}, grad: {self.grad}: {self.op} {self.values_of_inputs()}'
 
     def __add__(self, other):
         return add(self, other)
 
+    def __radd__(self, other):
+        return add(other, self)
+
     def __sub__(self, other):
         return add(self, -other)
+
+    def __rsub__(self, other):
+        return add(other, -self)
 
     def __mul__(self, other):
         return mul(self, other)
 
+    def __rmul__(self, other):
+        return mul(other, self)
+
     def __truediv__(self, other):
         return div(self, other)
+
+    def __rtruediv__(self, other):
+        return div(other, self)
+
+    def __matmul__(self, other):
+        return matmul(self, other)
+
+    def __rmatmul__(self, other):
+        return matmul(other, self)
+
+    def __getitem__(self, item):
+        return self.value.__getitem__(item)
+
+    def __setitem__(self, key, value):
+        self.value.__setitem__(key, value)
+        if EAGER:
+            self.eager_exec()
+
+    def __delitem__(self, key):
+        self.value.__delitem__(key)
+        if EAGER:
+            self.eager_exec()
+
+    def __len__(self):
+        return self.value.__len__()
+
+    def __getattr__(self, item):
+        """
+        把各种没重载的方法全部绑定到 self.value 上。
+        即，Tensor 支持所有 self.value 的属性、方法。
+
+        注: self.value 正确情况下是 np.ndarray
+        """
+        value_hash = hash(str(self.value))
+        ret = eval(f'self.value.{item}')
+        if EAGER and value_hash != hash(str(self.value)):  # changed, re exec
+            self.eager_exec()
+        return ret
+
+
+def tensor(array_like) -> Tensor:
+    """tensor 从给定 array_like 创建一个 Tensor 对象
+
+    类似于 numpy 使用 np.array 用来构建 np.ndarray 一样,
+    Tensor 的构造不方便直接暴露给用户, 应该使用这个辅助方法来构造。
+
+    :param array_like: 张量
+    :return: Tensor 对象
+    """
+    return Tensor(identity, [np.asarray(array_like)])
 
 
 class Op(object):
@@ -114,7 +181,9 @@ class Identity(Op):
     """
 
     def __call__(self, a):
-        return Node(self, [a])
+        t = Tensor(self, a)
+        t.value = t.inputs[0]
+        return t
 
     def compute(self, inputs):
         return inputs[0]
@@ -130,7 +199,7 @@ class Add(Op):
     """加"""
 
     def __call__(self, a, b):
-        return Node(self, [a, b])
+        return Tensor(self, [a, b])
 
     def compute(self, inputs):
         return inputs[0] + inputs[1]
@@ -146,7 +215,7 @@ class Mul(Op):
     """乘"""
 
     def __call__(self, a, b):
-        return Node(self, [a, b])
+        return Tensor(self, [a, b])
 
     def compute(self, inputs):
         return inputs[0] * inputs[1]
@@ -162,7 +231,7 @@ class Div(Op):
     """除"""
 
     def __call__(self, a, b):
-        return Node(self, [a, b])
+        return Tensor(self, [a, b])
 
     def compute(self, inputs):
         return inputs[0] / inputs[1]
@@ -175,13 +244,39 @@ class Div(Op):
 div = Div()
 
 
+class Matmul(Op):
+    """矩阵乘法"""
+
+    def __call__(self, a, b):
+        return Tensor(self, [a, b])
+
+    def compute(self, inputs):
+        return inputs[0] @ inputs[1]
+
+    def gradient(self, inputs, output_grad):
+        return [self.df(inputs[0]) * output_grad, self.df(inputs[1]) * output_grad]
+
+    def df(self, inputs):
+        """f 的导函数，默认实现是做数值微分
+
+        :param inputs: 输入列表
+        :return: 微分值
+        """
+        # 数值微分
+        h = 1e-4
+        return (self.compute([i + h for i in inputs]) - self.compute([i - h for i in inputs])) / (2 * h)
+
+
+matmul = Matmul()
+
+
 class Function(Op):
     """
     Function 是抽象的函数。实现了默认的数值微分。
     """
 
     def __call__(self, *inputs):
-        return Node(self, inputs)
+        return Tensor(self, inputs)
 
     def f(self, inputs):
         """具体的函数
@@ -312,7 +407,7 @@ class Executor(object):
         return self.root.value
 
     def _dfs(self, lst, node):
-        if not isinstance(node, Node):
+        if not isinstance(node, Tensor):
             return
 
         for n in node.inputs:
@@ -335,7 +430,7 @@ class Executor(object):
         for n in reversed(self.topo_list):
             grad = n.op.gradient(n.values_of_inputs(), n.grad)
             for i, g in zip(n.inputs, grad):
-                if isinstance(i, Node):
+                if isinstance(i, Tensor):
                     i.grad += g
         if DEBUG:
             print("\nAUTODIFF:")
@@ -353,7 +448,8 @@ class EagerExecutor(Executor):
     而 Executor 会叠加计算。
     所以这个 EagerExecutor 在遍历节点的时候会把之前计算出的 grad 置为 0。
     """
+
     def _dfs(self, lst, node):
         super()._dfs(lst, node)
-        if isinstance(node, Node):
+        if isinstance(node, Tensor):
             node.grad = 0.0  # reset grad

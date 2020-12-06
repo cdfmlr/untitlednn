@@ -4,7 +4,7 @@ import pickle
 import time
 import numpy as np
 
-from untitlednn.tensor import Tensor
+from untitlednn.autodiff import Tensor
 from untitlednn.util.data_iterator import BatchIterator
 
 
