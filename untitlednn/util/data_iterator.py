@@ -9,6 +9,8 @@ from collections import namedtuple
 
 import numpy as np
 
+from untitlednn.autodiff import tensor
+
 Batch = namedtuple("Batch", ["inputs", "targets"])
 
 
@@ -34,6 +36,15 @@ class BatchIterator(BaseIterator):
 
         for start in starts:
             end = start + self.batch_size
-            batch_inputs = inputs[start: end]
-            batch_targets = targets[start: end]
+            batch_inputs = tensor(inputs[start: end])
+            batch_targets = tensor(targets[start: end])
+
+            lack = self.batch_size - len(batch_inputs)
+            if lack != 0:
+                if len(inputs) > self.batch_size:
+                    batch_inputs = tensor(inputs[start - lack: end])
+                    batch_targets = tensor(targets[start - lack: end])
+                else:
+                    raise ValueError('No enough data to generate any batch.')
+
             yield Batch(inputs=batch_inputs, targets=batch_targets)

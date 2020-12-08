@@ -1,9 +1,9 @@
 import numpy as np
-from functools import wraps
+from functools import wraps, total_ordering
 
 # 调试模式, 打印自动微分执行的信息
 DEBUG = False
-# 及时执行模式, 及时求值
+# 及时执行模式, 及时求值 (Tensor.value), 不求 Tensor.grad
 EAGER = True
 
 
@@ -14,14 +14,17 @@ def set_eager(eager: bool):
     EAGER = eager
 
 
+@total_ordering  # eq + lt => eq, ne, lt, le, gt, ge
 class Tensor(object):
     """计算图的节点, 表示某个计算的结果
     """
     _global_id = 0  # TODO: Threading safe
 
-    def __init__(self, op=None, inputs=None):
+    def __init__(self, op=None, inputs=None):  # TODO: Tensor(inputs, op)
         if inputs is None:
             inputs = []
+        if op is None:
+            op = identity
         self.inputs = inputs
         self.op = op
 
@@ -56,8 +59,8 @@ class Tensor(object):
         """立即求值(value, grad)
         """
         self.evaluate()
-        ex = EagerExecutor(self)
-        ex.grad()
+        # ex = EagerExecutor(self)
+        # ex.grad()
         # self.evaluate()  # 立即求值
         if DEBUG:
             print(f"eager exec: {self}")
@@ -75,10 +78,13 @@ class Tensor(object):
         return add(other, self)
 
     def __sub__(self, other):
-        return add(self, -other)
+        return sub(self, other)
 
     def __rsub__(self, other):
-        return add(other, -self)
+        return sub(other, self)
+
+    def __neg__(self):
+        return sub(0, self)
 
     def __mul__(self, other):
         return mul(self, other)
@@ -97,6 +103,9 @@ class Tensor(object):
 
     def __rmatmul__(self, other):
         return matmul(other, self)
+
+    def __pow__(self, p, modulo=None):
+        return power(self, p)
 
     def __getitem__(self, item):
         return self.value.__getitem__(item)
@@ -121,11 +130,25 @@ class Tensor(object):
 
         注: self.value 正确情况下是 np.ndarray
         """
-        value_hash = hash(str(self.value))
+        # value_hash = hash(str(self.value))
         ret = eval(f'self.value.{item}')
-        if EAGER and value_hash != hash(str(self.value)):  # changed, re exec
-            self.eager_exec()
+        # if EAGER and value_hash != hash(str(self.value)):  # changed, re exec
+        #     self.eager_exec()
         return ret
+
+    def __lt__(self, other):
+        other_value = other
+        if isinstance(other, Tensor):
+            other_value = other.value
+        return np.all(self.value < other_value)
+
+    def __eq__(self, other):
+        other_value = other
+        if isinstance(other, Tensor):
+            other_value = other.value
+        if len(self) == 0 and other_value:
+            return False
+        return np.all(self.value == other_value)
 
 
 def tensor(array_like) -> Tensor:
@@ -211,6 +234,22 @@ class Add(Op):
 add = Add()
 
 
+class Sub(Op):
+    """减"""
+
+    def __call__(self, a, b):
+        return Tensor(self, [a, b])
+
+    def compute(self, inputs):
+        return inputs[0] - inputs[1]
+
+    def gradient(self, inputs, output_grad):
+        return [output_grad, -output_grad]
+
+
+sub = Sub()
+
+
 class Mul(Op):
     """乘"""
 
@@ -254,20 +293,49 @@ class Matmul(Op):
         return inputs[0] @ inputs[1]
 
     def gradient(self, inputs, output_grad):
-        return [self.df(inputs[0]) * output_grad, self.df(inputs[1]) * output_grad]
-
-    def df(self, inputs):
-        """f 的导函数，默认实现是做数值微分
-
-        :param inputs: 输入列表
-        :return: 微分值
-        """
-        # 数值微分
-        h = 1e-4
-        return (self.compute([i + h for i in inputs]) - self.compute([i - h for i in inputs])) / (2 * h)
+        return [output_grad @ inputs[1].T, inputs[0].T @ output_grad]
 
 
 matmul = Matmul()
+
+
+class Power(Op):
+    def __call__(self, a, b):
+        return Tensor(self, [a, b])
+
+    def compute(self, inputs):
+        return inputs[0] ** inputs[1]
+
+    def gradient(self, inputs, output_grad):
+        # Refer SymPy
+        # >>> diff(a ** b, a)
+        # a**b*b/a
+        # >>> diff(a ** b, b)
+        # a**b*log(a)
+        t = inputs[0] ** inputs[1]
+        return [t * inputs[1] / inputs[0] * output_grad,
+                t * log(inputs[0]) * output_grad]
+
+
+power = Power()
+
+
+class Log(Op):
+    """
+    Natural logarithm, element-wise.
+    """
+
+    def __call__(self, a):
+        return Tensor(self, [a])
+
+    def compute(self, inputs):
+        return np.log(inputs[0])
+
+    def gradient(self, inputs, output_grad):
+        return [1 / inputs[0] * output_grad]
+
+
+log = Log()
 
 
 class Function(Op):
@@ -453,3 +521,43 @@ class EagerExecutor(Executor):
         super()._dfs(lst, node)
         if isinstance(node, Tensor):
             node.grad = 0.0  # reset grad
+
+
+class AutoDiff(object):
+    """AutoDiff execs auto diff for a block of code.
+
+    example:
+        a = tensor([1, 2, 3])
+        b = tensor([4, 5, 6])
+
+        with AutoDiff(a, b) as ad:
+            c = sin(a) * sin(b)
+
+        da = ad.gradient(c, a)
+        db = ad.gradient(c, b)
+    """
+
+    def __init__(self, *tensors):
+        self.tensors = tensors
+
+    def __enter__(self):
+        for t in self.tensors:
+            if isinstance(t, Tensor):
+                t.evaluate()
+                t.grad = 0.0
+                t.inputs = [t.value]
+                t.op = identity
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.executed_grad = {}  # {id(y): output_grad}
+
+    def gradient(self, y, x, output_grad=1.0):
+        """Calculates ∂y/∂x
+        """
+        if np.any(self.executed_grad.get(id(y), None) != output_grad):
+            ex = Executor(y)
+            ex.grad(output_grad=output_grad)
+            self.executed_grad[id(y)] = output_grad
+
+        return x.grad

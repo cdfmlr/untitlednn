@@ -4,7 +4,7 @@ import time
 import numpy as np
 from tensorflow.keras.datasets import mnist  # to get MNIST conveniently
 
-from untitlednn.autodiff import tensor
+from untitlednn.autodiff import tensor, Tensor
 from untitlednn.nn import NeuralNetwork
 from untitlednn.layer import Dense, ReLU
 from untitlednn.model import Model
@@ -53,9 +53,7 @@ def main(args):
     network = NeuralNetwork([
         Dense(MNIST_IMG_LEN, 100),
         ReLU(),
-        Dense(100, 30),
-        ReLU(),
-        Dense(30, 10),
+        Dense(100, 10),
     ])
 
     # build model
@@ -69,12 +67,14 @@ def main(args):
     print("Start train:")
     model.fit(train_x, train_y, batch_size=args.batch_size, epochs=args.num_epoch, validation_data=(test_x, test_y))
 
-    # save and load
-    print(f"Save model to {MODEL_SAVE_PATH}")
-    model.save(MODEL_SAVE_PATH)
+    print(Tensor._global_id)
 
-    print(f"Load model from {MODEL_SAVE_PATH}.")
-    model: Model = Model.load(MODEL_SAVE_PATH)
+    # # save and load
+    # print(f"Save model to {MODEL_SAVE_PATH}")
+    # model.save(MODEL_SAVE_PATH)
+    #
+    # print(f"Load model from {MODEL_SAVE_PATH}.")
+    # model: Model = Model.load(MODEL_SAVE_PATH)
 
     # evaluate the model
     print("Evaluate on train set:", end='\t')

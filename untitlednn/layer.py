@@ -1,6 +1,7 @@
 import numpy as np
 
 from untitlednn.initializer import RandomInitializer, ZeroInitializer
+from untitlednn.autodiff import AutoDiff, tensor
 
 
 class Layer(object):
@@ -19,7 +20,17 @@ class Layer(object):
         raise NotImplementedError
 
     def backward(self, grads):
-        raise NotImplementedError
+        with AutoDiff(self.inputs) as ad:
+            f = self.forward(self.inputs)
+
+        g = ad.gradient(f, self.inputs, output_grad=grads)
+
+        for key in self.params:
+            # self.grads[key] = ad.gradient(f, self.params, output_grad=grads)
+            # 👇下面这行代码等于上面的这行👆，减少函数调用
+            self.grads[key] = self.params[key].grad
+
+        return g
 
     @property
     def param_num(self):
@@ -52,10 +63,10 @@ class Dense(Layer):
         self.inputs = inputs
         return inputs @ self.params["w"] + self.params["b"]
 
-    def backward(self, grads):
-        self.grads["w"] = self.inputs.T @ grads
-        self.grads["b"] = np.sum(grads, axis=0)
-        return grads @ self.params["w"].T
+    # def backward(self, grads):
+    #     self.grads["w"] = self.inputs.T @ grads
+    #     self.grads["b"] = np.sum(grads, axis=0)
+    #     return grads @ self.params["w"].T
 
 
 class Activation(Layer):
@@ -73,10 +84,10 @@ class Activation(Layer):
 
     def forward(self, inputs):
         self.inputs = inputs
-        return self.func(inputs)
+        return tensor(self.func(inputs))
 
     def backward(self, grads):
-        return self.derivative_func(self.inputs) * grads
+        return tensor(self.derivative_func(self.inputs)) * grads
 
 
 class Sigmoid(Activation):

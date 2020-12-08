@@ -56,16 +56,17 @@ def test_tensor_eager():
     a[0] = 1
 
     # c = a + b
-    c = sin1(a) * sin1(b)
+    with AutoDiff(a, b) as ad:
+        c = sin1(a) * sin1(b)
+
+    da = ad.gradient(c, a)
+    db = ad.gradient(c, b)
 
     print('c:', c, '\nc.shape:', c.shape)
     print('c.value:', c.value, 'c[0]:', c[0])
 
-    # ex = Executor(c)
-    # print('ex.run(): ', ex.run())
-    #
-    # ex.grad()
     print('grads:', a.grad, b.grad)
+    print('da,db:', da, db)
 
 
 if __name__ == '__main__':
