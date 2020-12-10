@@ -5,12 +5,14 @@ class NeuralNetwork(object):
     def __init__(self, layers):
         self.layers = layers
 
+    # @profile    # https://github.com/pythonprofilers/memory_profiler
     def forward(self, inputs):
         for layer in self.layers:
-            inputs = layer.forward(inputs)
+            inputs = layer.forward_with_autodiff(inputs)
 
         return inputs
 
+    # @profile    # https://github.com/pythonprofilers/memory_profiler
     def backward(self, grad):
         all_grads = []
         for layer in reversed(self.layers):

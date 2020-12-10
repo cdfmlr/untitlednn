@@ -4,6 +4,7 @@ import numpy as np
 # 导入数据
 full_df = pd.DataFrame()
 for i in range(1, 5):
+    # df = pd.read_csv(f'schoolwork/data/data{i}.csv', header=None)
     df = pd.read_csv(f'data/data{i}.csv', header=None)
     full_df = full_df.append(df)
 
@@ -124,7 +125,7 @@ model_unn.summary()
 # fit
 model_unn.fit(train_x, train_y,
               batch_size=128,
-              epochs=1,
+              epochs=10,
               validation_data=(validation_x, validation_y))
 
 print('evaluate:', model_unn.evaluate(test_x, test_y))

@@ -6,7 +6,7 @@ from tensorflow.keras.datasets import mnist  # to get MNIST conveniently
 
 from untitlednn.autodiff import tensor, Tensor
 from untitlednn.nn import NeuralNetwork
-from untitlednn.layer import Dense, ReLU
+from untitlednn.layer import Dense, ReLU, Dropout
 from untitlednn.model import Model
 from untitlednn.loss import SoftmaxCrossEntropy
 from untitlednn.optimizer import Adam, SGD
@@ -51,9 +51,13 @@ def main(args):
 
     # construct network
     network = NeuralNetwork([
-        Dense(MNIST_IMG_LEN, 100),
+        Dense(MNIST_IMG_LEN, 200),
         ReLU(),
-        Dense(100, 10),
+        Dense(200, 100),
+        ReLU(),
+        Dense(100, 30),
+        ReLU(),
+        Dense(30, 10),
     ])
 
     # build model

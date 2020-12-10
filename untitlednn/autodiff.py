@@ -160,7 +160,7 @@ def tensor(array_like) -> Tensor:
     :param array_like: 张量
     :return: Tensor 对象
     """
-    return Tensor(identity, [np.asarray(array_like)])
+    return Tensor(identity, [np.array(array_like)])
 
 
 class Op(object):
@@ -506,6 +506,19 @@ class Executor(object):
                 print(n)
             print("-----\n")
 
+    def unlink_nodes(self) -> None:
+        """
+        断开所有计算图节点之间的连接。
+
+        这个方法会彻底破坏整个计算图, 不可恢复. 只应该在整个计算图不再使用后执行此方法！
+
+        具体的实现是置所有节点 (即 Tensor) 的 inputs 属性为 []。这样 GC 才能回收不
+        再使用的垃圾 Tensor 以及其中作为数据的 np.ndarray。
+        """
+        for i in self.topo_list:
+            if isinstance(i, Tensor):
+                i.inputs = []
+
 
 class EagerExecutor(Executor):
     """及时执行模式下用这个计算微分
@@ -550,14 +563,35 @@ class AutoDiff(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.executed_grad = {}  # {id(y): output_grad}
+        self._executed_grad = {}  # {id(y): output_grad}
+        self._executors = {}  # {id(y): Executor}
 
     def gradient(self, y, x, output_grad=1.0):
         """Calculates ∂y/∂x
         """
-        if np.any(self.executed_grad.get(id(y), None) != output_grad):
+        if np.any(self._executed_grad.get(id(y), None) != output_grad):
             ex = Executor(y)
             ex.grad(output_grad=output_grad)
-            self.executed_grad[id(y)] = output_grad
+            self._executed_grad[id(y)] = output_grad
+            self._executors[(id(y))] = ex
 
         return x.grad
+
+    def close(self) -> None:
+        """
+        结束这一段自动微分工作, 断开所有计算图节点之间的连接。
+
+        这个方法会彻底破坏整个计算图, 不可恢复. 只应该在整个计算图不再使用后执行此方法！
+
+        断开计算图的连接是内存优化的关键！！！
+        计算图节点 (即 Tensor) 相互引用, 造成这些不再使用的节点, 无法及时被 GC 清理,
+        这些无法再次使用的计算图节点, 会长时间驻留内存, 直到 model.fit 的 for epoch
+        训练循环完全结束。
+        这个内存泄露问题会导致内存占用超出预期数十倍, 用 schoolwork 训练 10 轮作为比
+        较, 下面的代码可以使内存峰值从 3GiB 降低到 120 MiB。
+        """
+        for ex in self._executors.values():
+            ex.unlink_nodes()
+
+        self._executed_grad = {}
+        self._executors = {}

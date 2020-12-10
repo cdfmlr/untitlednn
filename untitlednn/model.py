@@ -3,6 +3,7 @@ import os
 import pickle
 import time
 import numpy as np
+from pympler import tracker
 
 from untitlednn.autodiff import Tensor
 from untitlednn.util.data_iterator import BatchIterator
@@ -20,12 +21,14 @@ class Model(object):
 
         self.name = kwargs.get("name", f"Model_{id(self)}")
 
+    # @profile    # https://github.com/pythonprofilers/memory_profiler
     def forward(self, inputs):
         return self.nn.forward(inputs)
 
     def backward(self, grad):
         return self.nn.backward(grad)
 
+    # @profile    # https://github.com/pythonprofilers/memory_profiler
     def loss_bp_grads(self, predictions, targets) -> (Tensor, Tensor):
         """loss_bp_grads 计算 predictions 对于 targets 的损失，反向传播得到梯度，调用优化器得到每个参数待更新的步长。
         :returns: (grads, steps)
@@ -46,6 +49,7 @@ class Model(object):
             for k in param.keys():
                 param[k] += grad[k]
 
+    # @profile    # https://github.com/pythonprofilers/memory_profiler
     def fit(self, train_x, train_y, batch_size=128, epochs=5, validation_data=None, verbose=True) -> None:
         """fit 在数据集 (train_x, train_y) 上训练模型。
 
@@ -60,6 +64,7 @@ class Model(object):
 
         TODO: returns history
         """
+        # tr = tracker.SummaryTracker()    # memory debug
         iterator = BatchIterator(batch_size=int(batch_size))
 
         losses = []
@@ -87,6 +92,8 @@ class Model(object):
                 print(f"Epoch {epoch + 1}/{epochs}:\t"
                       f"train {tt_end - tt_start :.4f}s, evaluate {te_end - te_start :.4f}s\t"
                       f"{res}")
+            # time.sleep(0.5)    # for debug
+        # tr.print_diff()    # memory debug
 
     def evaluate(self, test_x, test_y) -> dict:
         """evaluate 预测 test_x 的结果，评估模型在数据集 (test_x, test_y) 上的表现,
