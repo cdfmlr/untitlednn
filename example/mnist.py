@@ -51,9 +51,7 @@ def main(args):
 
     # construct network
     network = NeuralNetwork([
-        Dense(MNIST_IMG_LEN, 200),
-        ReLU(),
-        Dense(200, 100),
+        Dense(MNIST_IMG_LEN, 100),
         ReLU(),
         Dense(100, 30),
         ReLU(),
@@ -63,7 +61,7 @@ def main(args):
     # build model
     model = Model(network,
                   loss=SoftmaxCrossEntropy(),
-                  optimizer=Adam(lr=args.lr),
+                  optimizer=SGD(lr=args.lr),
                   evaluator=OneHotAccEvaluator)
     model.summary()
 
@@ -112,7 +110,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_epoch", default=5, type=int)
-    parser.add_argument("--lr", default=1e-3, type=float)  # Adam: 1e-3, SGD: 1e-1
+    parser.add_argument("--lr", default=1e-1, type=float)  # Adam: 1e-3, SGD: 1e-1
     parser.add_argument("--batch_size", default=64, type=int)
     args = parser.parse_args()
     main(args)
