@@ -13,3 +13,9 @@ Based on [borgwang/tinynn](https://github.com/borgwang/tinynn/tree/mini) and [dl
 [1] 王桂波. 动手设计实现一个深度学习框架. [zhuanlan.zhihu.com/p/78713744](https://zhuanlan.zhihu.com/p/78713744), 2020-09-21
 
 [2] 李豪. Python实现自动微分(Automatic Differentiation). [zhuanlan.zhihu.com/p/161635270](https://zhuanlan.zhihu.com/p/161635270), 2020-07-19
+
+## License
+
+MIT License
+
+Copyright (c) 2020 CDFMLR
